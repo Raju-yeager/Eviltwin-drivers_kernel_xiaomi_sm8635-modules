@@ -60,6 +60,7 @@
 #include "os_if_dp.h"
 #include "wlan_ipa_ucfg_api.h"
 #include "wlan_hdd_stats.h"
+#include <net/ieee80211_radiotap.h>
 
 #ifdef TX_MULTIQ_PER_AC
 #if defined(QCA_LL_TX_FLOW_CONTROL_V2) || defined(QCA_LL_PDEV_TX_FLOW_CONTROL)
@@ -517,6 +518,35 @@ static void __hdd_hard_start_xmit(struct sk_buff *skb,
 
 	if (hdd_drop_tx_packet_on_ftm(skb))
 		return;
+	if (adapter->device_mode == QDF_MONITOR_MODE ||
+	    hdd_get_conparam() == QDF_GLOBAL_MONITOR_MODE) {
+		struct ieee80211_radiotap_header *rtap;
+		uint16_t rtap_len;
+
+		if (unlikely(skb->len < sizeof(struct ieee80211_radiotap_header))) {
+			kfree_skb(skb);
+			return;
+		}
+
+		rtap = (struct ieee80211_radiotap_header *)skb->data;
+		rtap_len = le16_to_cpu(rtap->it_len);
+		if (unlikely(skb->len <= rtap_len)) {
+			kfree_skb(skb);
+			return;
+		}
+
+		skb_pull(skb, rtap_len);
+		skb->priority = SME_QOS_WMM_UP_BE;
+		skb->queue_mapping = 0;
+
+		status = ucfg_dp_start_xmit((qdf_nbuf_t)skb,
+					    adapter->deflink->vdev);
+		if (QDF_IS_STATUS_SUCCESS(status))
+			netif_trans_update(dev);
+		else
+			++stats->per_cpu[cpu].tx_dropped_ac[SME_AC_BE];
+		return;
+	}
 
 	osif_dp_mark_pkt_type(skb);
 	hdd_tx_latency_record_ingress_ts(adapter, skb);
