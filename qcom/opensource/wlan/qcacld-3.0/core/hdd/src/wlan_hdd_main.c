@@ -3199,11 +3199,11 @@ static void hdd_mon_mode_ether_setup(struct net_device *dev)
 {
 	dev->header_ops         = NULL;
 	dev->type               = ARPHRD_IEEE80211_RADIOTAP;
-	dev->hard_header_len    = ETH_HLEN;
+	dev->hard_header_len    = 0;
 	dev->mtu                = ETH_DATA_LEN;
 	dev->addr_len           = ETH_ALEN;
 	dev->tx_queue_len       = 1000; /* Ethernet wants good queues */
-	dev->flags              = IFF_BROADCAST|IFF_MULTICAST;
+	dev->flags              = IFF_BROADCAST | IFF_MULTICAST | IFF_NOARP;
 	dev->priv_flags        |= IFF_TX_SKB_SHARING;
 
 	memset(dev->broadcast, 0xFF, ETH_ALEN);
@@ -3299,6 +3299,9 @@ static int __hdd_mon_open(struct net_device *dev)
 		ucfg_dp_bbm_apply_independent_policy(hdd_ctx->psoc, &param);
 		ucfg_dp_set_current_throughput_level(hdd_ctx->psoc,
 						     PLD_BUS_WIDTH_VERY_HIGH);
+		wlan_hdd_netif_queue_control(adapter,
+					     WLAN_START_ALL_NETIF_QUEUE_N_CARRIER,
+					     WLAN_CONTROL_PATH);
 	}
 
 	return ret;
@@ -6809,11 +6812,13 @@ static const struct net_device_ops wlan_drv_ops = {
 };
 
 #ifdef FEATURE_MONITOR_MODE_SUPPORT
-/* Monitor mode net_device_ops, does not Tx and most of operations. */
+/* Monitor mode net_device_ops */
 static const struct net_device_ops wlan_mon_drv_ops = {
 	.ndo_open = hdd_mon_open,
 	.ndo_stop = hdd_stop,
+	.ndo_start_xmit = hdd_hard_start_xmit,
 	.ndo_get_stats = hdd_get_stats,
+	.ndo_set_mac_address = hdd_set_mac_address,
 };
 
 /**
@@ -6865,11 +6870,13 @@ static void hdd_set_mon_ops(struct net_device *dev)
 #endif
 
 #ifdef WLAN_FEATURE_PKT_CAPTURE
-/* Packet Capture mode net_device_ops, does not Tx and most of operations. */
+/* Packet Capture mode net_device_ops */
 static const struct net_device_ops wlan_pktcapture_drv_ops = {
 	.ndo_open = hdd_pktcapture_open,
 	.ndo_stop = hdd_stop,
+	.ndo_start_xmit = hdd_hard_start_xmit,
 	.ndo_get_stats = hdd_get_stats,
+	.ndo_set_mac_address = hdd_set_mac_address,
 };
 
 static void hdd_set_pktcapture_ops(struct net_device *dev)
@@ -7780,6 +7787,12 @@ int hdd_vdev_create(struct wlan_hdd_link_info *link_info)
 	}
 
 	hdd_vdev_configure_opmode_params(hdd_ctx, vdev, link_info);
+	if (adapter->device_mode == QDF_MONITOR_MODE ||
+	    hdd_get_conparam() == QDF_GLOBAL_MONITOR_MODE) {
+		sme_cli_set_command(link_info->vdev_id,
+				    wmi_vdev_param_tx_encap_type,
+				    2, VDEV_CMD);
+	}
 
 	hdd_nofl_debug("vdev %d created successfully", link_info->vdev_id);
 
