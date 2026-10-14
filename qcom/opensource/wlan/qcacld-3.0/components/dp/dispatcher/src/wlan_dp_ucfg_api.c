@@ -1342,6 +1342,7 @@ QDF_STATUS ucfg_dp_mon_register_txrx_ops(struct wlan_objmgr_vdev *vdev)
 	dp_intf = dp_link->dp_intf;
 	qdf_mem_zero(&txrx_ops, sizeof(txrx_ops));
 	txrx_ops.rx.rx = dp_mon_rx_packet_cbk;
+	txrx_ops.tx.tx_comp = dp_sta_notify_tx_comp_cb;
 	dp_monitor_set_rx_monitor_cb(&txrx_ops, dp_rx_monitor_callback);
 	txrx_ops.vdev_del_notify = wlan_dp_link_cdp_vdev_delete_notification;
 	cdp_vdev = cdp_vdev_register(soc, dp_link->link_id,
@@ -1440,7 +1441,7 @@ QDF_STATUS ucfg_dp_start_xmit(qdf_nbuf_t nbuf, struct wlan_objmgr_vdev *vdev)
 	 * the def_link is not expected to be NULL. Hence there is no need
 	 * to validate tx_dp_link again.
 	 */
-	tx_dp_link = dp_intf->def_link;
+	tx_dp_link = dp_intf->def_link ? dp_intf->def_link : dp_link;
 	qdf_atomic_inc(&dp_intf->num_active_task);
 	status = dp_start_xmit(tx_dp_link, nbuf);
 	qdf_atomic_dec(&dp_intf->num_active_task);
