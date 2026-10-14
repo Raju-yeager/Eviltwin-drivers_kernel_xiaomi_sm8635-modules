@@ -4811,7 +4811,13 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 
 	dp_vdev_id_map_tbl_add(soc, vdev, vdev_id);
 
-	if (wlan_op_mode_monitor == vdev->opmode) {
+if (wlan_op_mode_monitor == vdev->opmode) {
+		vdev->tx_encap_type = htt_cmn_pkt_type_raw;
+		vdev->rx_decap_type = htt_cmn_pkt_type_raw;
+		vdev->dscp_tid_map_id = 0;
+		vdev->skip_sw_tid_classification = DP_TX_HW_DSCP_TID_MAP_VALID;
+		dp_tx_vdev_attach(vdev);
+		soc->arch_ops.txrx_vdev_attach(soc, vdev);
 		if (dp_monitor_vdev_attach(vdev) == QDF_STATUS_SUCCESS) {
 			dp_monitor_pdev_set_mon_vdev(vdev);
 			return dp_monitor_vdev_set_monitor_mode_buf_rings(pdev);
