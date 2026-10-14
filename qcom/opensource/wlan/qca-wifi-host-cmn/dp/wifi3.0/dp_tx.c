@@ -1461,7 +1461,10 @@ static qdf_nbuf_t dp_tx_prepare_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 			 1, qdf_nbuf_len(nbuf));
 
 	/* Continue only if frames are of DATA type */
-	if (!DP_FRAME_IS_DATA(qos_wh)) {
+/* Allow Management/Control frames when in Monitor Mode */
+	if (vdev->opmode != wlan_op_mode_monitor &&
+	    vdev->qdf_opmode != QDF_MONITOR_MODE &&
+	    !DP_FRAME_IS_DATA(qos_wh)) {
 		DP_STATS_INC(vdev,
 			     tx_i[msdu_info->xmit_type].raw.invalid_raw_pkt_datatype,
 			     1);
@@ -1469,7 +1472,7 @@ static qdf_nbuf_t dp_tx_prepare_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 		goto error;
 	}
 	/* SWAR for HW: Enable WEP bit in the AMSDU frames for RAW mode */
-	if (vdev->raw_mode_war &&
+	if (DP_FRAME_IS_DATA(qos_wh) && vdev->raw_mode_war &&
 	    (qos_wh->i_fc[0] & QDF_IEEE80211_FC0_SUBTYPE_QOS) &&
 	    (qos_wh->i_qos[0] & IEEE80211_QOS_AMSDU))
 		qos_wh->i_fc[1] |= IEEE80211_FC1_WEP;
@@ -1771,10 +1774,11 @@ static void dp_tx_get_tid(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 		eh = (qdf_ether_header_t *)nbuf->data;
 		hdr_ptr = (uint8_t *)(eh->ether_dhost);
 		L3datap = hdr_ptr + sizeof(qdf_ether_header_t);
-	} else {
+} else {
 		qdf_dot3_qosframe_t *qos_wh =
 			(qdf_dot3_qosframe_t *) nbuf->data;
-		msdu_info->tid = qos_wh->i_fc[0] & DP_FC0_SUBTYPE_QOS ?
+		msdu_info->tid = (DP_FRAME_IS_DATA(qos_wh) &&
+			(qos_wh->i_fc[0] & DP_FC0_SUBTYPE_QOS)) ?
 			qos_wh->i_qos[0] & DP_QOS_TID : 0;
 		return;
 	}
