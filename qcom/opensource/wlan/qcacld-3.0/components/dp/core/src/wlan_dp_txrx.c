@@ -450,13 +450,20 @@ void dp_get_transmit_mac_addr(struct wlan_dp_link *dp_link,
 				(struct qdf_mac_addr *)qdf_nbuf_data(nbuf));
 		}
 		break;
-	case QDF_STA_MODE:
+case QDF_STA_MODE:
 	case QDF_P2P_CLIENT_MODE:
 		if (wlan_cm_is_vdev_active(dp_link->vdev))
 			qdf_copy_macaddr(mac_addr_tx_allowed,
 					 &dp_link->conn_info.bssid);
 		break;
+	case QDF_MONITOR_MODE:
+		qdf_copy_macaddr(mac_addr_tx_allowed, &dp_intf->mac_addr);
+		break;
 	default:
+		if (cds_get_conparam() == QDF_GLOBAL_MONITOR_MODE ||
+		    wlan_vdev_mlme_get_opmode(dp_link->vdev) == QDF_MONITOR_MODE)
+			qdf_copy_macaddr(mac_addr_tx_allowed,
+					 &dp_intf->mac_addr);
 		break;
 	}
 }
@@ -683,7 +690,10 @@ dp_start_xmit(struct wlan_dp_link *dp_link, qdf_nbuf_t nbuf)
 			     sizeof(qdf_nbuf_data(nbuf)),
 			     QDF_TX));
 
-	if (!dp_intf_is_tx_allowed(nbuf, dp_link->link_id, soc,
+if (dp_intf->device_mode != QDF_MONITOR_MODE &&
+	    cds_get_conparam() != QDF_GLOBAL_MONITOR_MODE &&
+	    wlan_vdev_mlme_get_opmode(dp_link->vdev) != QDF_MONITOR_MODE &&
+	    !dp_intf_is_tx_allowed(nbuf, dp_link->link_id, soc,
 				   mac_addr_tx_allowed.bytes)) {
 		dp_info("Tx not allowed for sta:" QDF_MAC_ADDR_FMT,
 			QDF_MAC_ADDR_REF(mac_addr_tx_allowed.bytes));
