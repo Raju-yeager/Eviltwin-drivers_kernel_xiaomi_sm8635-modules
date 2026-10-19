@@ -1651,20 +1651,21 @@ dp_rx_handle_smart_mesh_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 		return 1;
 	}
 
-	/* Only retain RX MSDU payload in the skb */
-	qdf_nbuf_trim_tail(nbuf, qdf_nbuf_len(nbuf) -
-			   ppdu_info->msdu_info.payload_len);
-	if (!qdf_nbuf_update_radiotap(&mon_pdev->ppdu_info.rx_status, nbuf,
-				      qdf_nbuf_headroom(nbuf))) {
-		DP_STATS_INC(pdev, dropped.mon_radiotap_update_err, 1);
-		return 1;
-	}
+/* Only retain RX MSDU payload in the skb */
+    qdf_nbuf_trim_tail(nbuf, qdf_nbuf_len(nbuf) -
+                             ppdu_info->msdu_info.payload_len);
 
-	mon_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev,
-			      nbuf, NULL);
-	mon_pdev->ppdu_info.rx_status.monitor_direct_used = 0;
-	return 0;
-}
+    /* Drop corrupted RF noise frames with bad FCS/CRC before radiotap update */
+    if (ppdu_info->fcs_err) {
+        qdf_nbuf_free(nbuf);
+        return 1;
+    }
+
+    if (!qdf_nbuf_update_radiotap(&mon_pdev->ppdu_info.rx_status, nbuf,
+                                  qdf_nbuf_headroom(nbuf))) {
+        DP_STATS_INC(pdev, dropped.mon_radiotap_update_err, 1);
+        return 1;
+    }
 
 #ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
 /**
